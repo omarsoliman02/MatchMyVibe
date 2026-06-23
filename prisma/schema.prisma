@@ -1,0 +1,116 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+
+  memberships GroupMember[]
+  preferences UserPreference[]
+  votes       Vote[]
+}
+
+model Group {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique @default(cuid())
+  createdAt  DateTime @default(now())
+
+  members     GroupMember[]
+  sessions    Session[]
+  preferences UserPreference[]
+}
+
+model GroupMember {
+  userId  String
+  groupId String
+  role    GroupRole @default(MEMBER)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+}
+
+model UserPreference {
+  id      String @id @default(cuid())
+  userId  String
+  groupId String
+
+  budget              Int
+  dietaryRestrictions String[]
+  venueTypes          String[]
+  latitude            Float
+  longitude           Float
+
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+}
+
+model Session {
+  id        String        @id @default(cuid())
+  groupId   String
+  status    SessionStatus @default(COLLECTING)
+  createdAt DateTime      @default(now())
+
+  group           Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  recommendations Recommendation[]
+  votes           Vote[]
+}
+
+model Recommendation {
+  id        String @id @default(cuid())
+  sessionId String
+
+  osmId     String
+  name      String
+  address   String
+  latitude  Float
+  longitude Float
+  venueType String
+  score     Float
+  details   Json
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  votes   Vote[]
+}
+
+model Vote {
+  id               String @id @default(cuid())
+  userId           String
+  sessionId        String
+  recommendationId String
+
+  createdAt DateTime @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session        Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+enum SessionStatus {
+  COLLECTING
+  MATCHING
+  VOTING
+  DONE
+}
