@@ -35,6 +35,7 @@ export interface OsmVenue {
 
 export interface ScoredVenue extends OsmVenue {
   score: number
+  summary?: string
   compatibilityReasons: string[]
 }
 

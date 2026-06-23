@@ -92,11 +92,17 @@ export function rankVenues(
     score += 0.25 * Math.max(0, 1 - dist / MAX_DIST)
     reasons.push(`À ${dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`} du centre du groupe`)
 
-    if (v.tags.cuisine) reasons.push(`Cuisine : ${v.tags.cuisine.split(";")[0].replace(/_/g, " ")}`)
+    const cuisine = v.tags.cuisine ? v.tags.cuisine.split(";")[0].replace(/_/g, " ") : null
+    if (cuisine) reasons.push(`Cuisine : ${cuisine}`)
+
+    // Résumé déterministe (secours si l'IA ne fournit pas de "summary").
+    const distLabel = dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`
+    const summary = `${TYPE_LABEL[key] ?? key}${cuisine ? ` ${cuisine}` : ""} à ${distLabel} du groupe.`
 
     return {
       ...v,
       score: Math.min(1, Math.round(score * 100) / 100),
+      summary,
       compatibilityReasons: reasons.slice(0, 3),
     }
   })

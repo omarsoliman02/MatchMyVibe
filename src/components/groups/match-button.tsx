@@ -3,11 +3,13 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Sparkles } from "@/components/ui/icons"
+import { LLM_MODELS, DEFAULT_MODEL_ID, resolveModel } from "@/lib/llm/models"
 
 export function MatchButton({ groupId }: { groupId: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [model, setModel] = useState(DEFAULT_MODEL_ID)
 
   async function handleMatch() {
     setLoading(true)
@@ -16,7 +18,7 @@ export function MatchButton({ groupId }: { groupId: string }) {
     const res = await fetch("/api/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId }),
+      body: JSON.stringify({ groupId, model }),
     })
 
     setLoading(false)
@@ -30,8 +32,27 @@ export function MatchButton({ groupId }: { groupId: string }) {
     router.push(`/sessions/${sessionId}`)
   }
 
+  const hint = resolveModel(model).hint
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <label className="block text-left">
+        <span className="text-xs font-medium text-faint">Modèle IA</span>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={loading}
+          className="input w-full mt-1"
+        >
+          {LLM_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        {hint && <span className="block text-xs text-faint mt-1">{hint}</span>}
+      </label>
+
       <button onClick={handleMatch} disabled={loading} className="btn btn-primary btn-lg w-full">
         {loading ? (
           <>

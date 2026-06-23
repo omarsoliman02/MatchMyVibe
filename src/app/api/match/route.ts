@@ -7,10 +7,15 @@ import { calculateBarycenter } from "@/lib/overpass/barycenter"
 import { searchVenuesNearPoint } from "@/lib/overpass/client"
 import { rankVenues } from "@/lib/matching/score"
 import { matchVenuesWithGemini } from "@/lib/gemini/matching"
+import { matchVenuesWithOllama } from "@/lib/ollama/matching"
+import { resolveModel } from "@/lib/llm/models"
 import { broadcast } from "@/lib/sse/broadcaster"
 import type { UserPreferenceInput, VenueType, ScoredVenue } from "@/types"
 
-const matchSchema = z.object({ groupId: z.string().min(1) })
+const matchSchema = z.object({
+  groupId: z.string().min(1),
+  model: z.string().optional(),
+})
 const SEARCH_RADIUS_METERS = 800
 
 export async function POST(req: NextRequest) {
@@ -25,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "groupId required" }, { status: 400 })
   }
 
-  const { groupId } = parsed.data
+  const { groupId, model } = parsed.data
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -47,12 +52,16 @@ export async function POST(req: NextRequest) {
     data: { groupId, status: "MATCHING" },
   })
 
-  after(() => runMatching(dbSession.id, preferences))
+  after(() => runMatching(dbSession.id, preferences, model))
 
   return NextResponse.json({ sessionId: dbSession.id, status: "MATCHING" })
 }
 
-async function runMatching(sessionId: string, preferences: UserPreferenceInput[]) {
+async function runMatching(
+  sessionId: string,
+  preferences: UserPreferenceInput[],
+  modelId?: string
+) {
   try {
     const barycenter = calculateBarycenter(preferences)
     const allVenueTypes = [...new Set(preferences.flatMap((p) => p.venueTypes))] as VenueType[]
@@ -68,14 +77,19 @@ async function runMatching(sessionId: string, preferences: UserPreferenceInput[]
     const shortlist = rankVenues(barycenter, preferences, venues, 10)
     let finalRecs = shortlist.slice(0, 3)
 
-    // C'est l'IA (Gemini) qui CHOISIT et classe le top 3 parmi la short-list.
-    // Bornée à 12 s : au-delà (ou en cas d'échec), on retombe en silence sur la
-    // pré-sélection déterministe pour ne jamais bloquer l'utilisateur.
+    // C'est l'IA (Gemini cloud OU modèle local Ollama) qui CHOISIT et classe le
+    // top 3 parmi la short-list. Bornée par un timeout : au-delà (ou en cas
+    // d'échec), on retombe en silence sur la pré-sélection déterministe pour ne
+    // jamais bloquer l'utilisateur. Le local a un budget de temps plus large
+    // (chargement du modèle au 1er appel).
+    const llm = resolveModel(modelId)
     if (shortlist.length > 1) {
-      const curated = await withTimeout(
-        matchVenuesWithGemini(preferences, shortlist).catch(() => null),
-        12_000
-      )
+      const curate =
+        llm.provider === "ollama"
+          ? matchVenuesWithOllama(preferences, shortlist, llm.ollamaModel!)
+          : matchVenuesWithGemini(preferences, shortlist)
+      const timeoutMs = llm.provider === "ollama" ? 30_000 : 12_000
+      const curated = await withTimeout(curate.catch(() => null), timeoutMs)
       if (curated && curated.length > 0) finalRecs = curated
     }
 
@@ -102,7 +116,7 @@ async function persist(sessionId: string, venues: ScoredVenue[]) {
       longitude: v.longitude,
       venueType: v.venueType,
       score: v.score,
-      details: { compatibilityReasons: v.compatibilityReasons, tags: v.tags },
+      details: { summary: v.summary, compatibilityReasons: v.compatibilityReasons, tags: v.tags },
     })),
   })
 }

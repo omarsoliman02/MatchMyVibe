@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { OsmVenue, ScoredVenue, UserPreferenceInput } from "@/types"
+import { buildMatchingPrompt, parseRecommendations } from "@/lib/llm/shared"
 
 const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
@@ -8,38 +9,6 @@ const genAI = process.env.GEMINI_API_KEY
 // flash-lite en priorité : ~0,9 s (vs ~6,5 s pour flash-latest qui "réfléchit").
 // flash-latest en secours (plus soigné si besoin).
 const GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"]
-
-// Projection compacte : seulement ce qui sert au scoring (moins de tokens = plus rapide).
-function compactVenues(venues: OsmVenue[]) {
-  return venues.slice(0, 15).map((v) => ({
-    osmId: v.osmId,
-    name: v.name,
-    type: v.venueType,
-    cuisine: v.tags.cuisine,
-    diet: Object.keys(v.tags).filter((k) => k.startsWith("diet:")),
-  }))
-}
-
-const MATCHING_PROMPT = (preferences: UserPreferenceInput[], venues: OsmVenue[]) =>
-  `Expert en sorties de groupe. Choisis les 3 meilleurs lieux parmi la liste, selon les préférences.
-
-PRÉFÉRENCES (budget, régime, types):
-${JSON.stringify(preferences.map((p) => ({ budget: p.budget, diet: p.dietaryRestrictions, types: p.venueTypes })))}
-
-LIEUX:
-${JSON.stringify(compactVenues(venues))}
-
-Règles: respecter le régime de TOUS, privilégier le type voulu par la majorité, score 0.0-1.0. Raisons courtes et concrètes, en français.
-Réponds UNIQUEMENT ce JSON (sans markdown): {"recommendations":[{"osmId":"","score":0.0,"compatibilityReasons":["raison courte"]}]}`
-
-interface AIRecommendation {
-  osmId: string
-  score: number
-  compatibilityReasons: string[]
-}
-interface AIResponse {
-  recommendations: AIRecommendation[]
-}
 
 async function generateWithFallback(prompt: string): Promise<string> {
   if (!genAI) throw new Error("GEMINI_API_KEY manquante")
@@ -74,22 +43,6 @@ export async function matchVenuesWithGemini(
 ): Promise<ScoredVenue[]> {
   if (venues.length === 0 || !genAI) return []
 
-  const text = await generateWithFallback(MATCHING_PROMPT(preferences, venues))
-
-  let parsed: AIResponse
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    const m = text.match(/\{[\s\S]*\}/)
-    parsed = m ? JSON.parse(m[0]) : { recommendations: [] }
-  }
-
-  return (parsed.recommendations ?? [])
-    .slice(0, 3)
-    .map((rec) => {
-      const venue = venues.find((v) => v.osmId === String(rec.osmId))
-      if (!venue) return null
-      return { ...venue, score: rec.score, compatibilityReasons: rec.compatibilityReasons ?? [] }
-    })
-    .filter(Boolean) as ScoredVenue[]
+  const text = await generateWithFallback(buildMatchingPrompt(preferences, venues))
+  return parseRecommendations(text, venues)
 }

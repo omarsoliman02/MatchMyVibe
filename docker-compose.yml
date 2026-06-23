@@ -13,6 +13,10 @@ services:
       - .env.local
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/matchmyvibe
+      # Le conteneur atteint Ollama qui tourne sur l'hôte (macOS) via host.docker.internal.
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy

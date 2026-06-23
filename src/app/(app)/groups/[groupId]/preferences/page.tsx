@@ -42,22 +42,71 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
 
   const [loading, setLoading] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
   const [error, setError] = useState("")
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [address, setAddress] = useState("")
+  const [addressInput, setAddressInput] = useState("")
 
   const [budget, setBudget] = useState(30)
   const [dietary, setDietary] = useState<string[]>([])
   const [venueTypes, setVenueTypes] = useState<string[]>(["restaurant"])
 
+  // Adresse → coordonnées (géocodage OpenStreetMap / Nominatim).
+  async function geocodeAddress(query: string) {
+    const q = query.trim()
+    if (!q) return
+    setGeocoding(true)
+    setError("")
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+        { headers: { Accept: "application/json" } }
+      )
+      const data = (await r.json()) as Array<{ lat: string; lon: string; display_name: string }>
+      if (!data || data.length === 0) {
+        setError("Adresse introuvable. Ajoute la ville pour préciser.")
+        return
+      }
+      const hit = data[0]
+      setLocation({ lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) })
+      setAddress(hit.display_name)
+      setAddressInput(hit.display_name)
+    } catch {
+      setError("Erreur de recherche d'adresse. Réessaie.")
+    } finally {
+      setGeocoding(false)
+    }
+  }
+
+  // Coordonnées → adresse (géocodage inverse), pour afficher une adresse lisible.
+  async function reverseGeocode(lat: number, lng: number) {
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        { headers: { Accept: "application/json" } }
+      )
+      const data = (await r.json()) as { display_name?: string }
+      if (data?.display_name) {
+        setAddress(data.display_name)
+        setAddressInput(data.display_name)
+      }
+    } catch {
+      /* on garde au moins les coordonnées */
+    }
+  }
+
   function getLocation() {
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        const { latitude: lat, longitude: lng } = pos.coords
+        setLocation({ lat, lng })
         setLocating(false)
+        reverseGeocode(lat, lng)
       },
       () => {
-        setError("Impossible d'obtenir ta localisation. Autorise l'accès dans ton navigateur.")
+        setError("Impossible d'obtenir ta position. Saisis plutôt une adresse.")
         setLocating(false)
       }
     )
@@ -113,15 +162,52 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="card p-5">
           <SectionHeader icon={<MapPin className="w-4 h-4" />} title="Ma localisation" />
-          {location ? (
-            <div className="flex items-center gap-2 text-sm alert-ok rounded-xl px-3 py-2.5">
-              <Check className="w-4 h-4" />
-              Position obtenue ({location.lat.toFixed(4)}, {location.lng.toFixed(4)})
-            </div>
-          ) : (
-            <button type="button" onClick={getLocation} disabled={locating} className="btn btn-secondary w-full">
-              {locating ? "Localisation en cours…" : "Partager ma position"}
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => setAddressInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  geocodeAddress(addressInput)
+                }
+              }}
+              placeholder="Ex : 12 rue de Rivoli, Paris"
+              className="input flex-1"
+            />
+            <button
+              type="button"
+              onClick={() => geocodeAddress(addressInput)}
+              disabled={geocoding || !addressInput.trim()}
+              className="btn btn-secondary shrink-0"
+            >
+              {geocoding ? "…" : "Rechercher"}
             </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={getLocation}
+            disabled={locating}
+            className="btn btn-ghost w-full mt-2 text-sm"
+          >
+            <MapPin className="w-4 h-4" />
+            {locating ? "Localisation en cours…" : "Utiliser ma position actuelle"}
+          </button>
+
+          {location && address && (
+            <div className="flex items-start gap-2 text-sm alert-ok rounded-xl px-3 py-2.5 mt-3">
+              <Check className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="min-w-0">{address}</span>
+            </div>
+          )}
+          {location && !address && (
+            <div className="flex items-center gap-2 text-sm alert-ok rounded-xl px-3 py-2.5 mt-3">
+              <Check className="w-4 h-4" />
+              Position enregistrée.
+            </div>
           )}
         </div>
 

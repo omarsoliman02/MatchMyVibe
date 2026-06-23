@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Check, Trophy, Sparkles } from "@/components/ui/icons"
+import { ArrowLeft, Check, Trophy, Sparkles, MapPin } from "@/components/ui/icons"
 
 interface Recommendation {
   id: string
@@ -12,8 +12,15 @@ interface Recommendation {
   venueType: string
   latitude: number
   longitude: number
-  details: { compatibilityReasons?: string[] }
+  details: { compatibilityReasons?: string[]; summary?: string }
   voteCount: number
+}
+
+// Lien Google Maps vers le lieu : par nom + adresse si dispo, sinon par coordonnées.
+function mapsUrl(rec: Recommendation): string {
+  const hasAddress = rec.address && rec.address !== "Adresse non disponible"
+  const query = hasAddress ? `${rec.name}, ${rec.address}` : `${rec.latitude},${rec.longitude}`
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 }
 
 interface SessionData {
@@ -219,7 +226,14 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
                 <Trophy className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wide">Choix du groupe</span>
               </div>
-              <h2 className="text-xl font-bold text-fg">{winner.name}</h2>
+              <a
+                href={mapsUrl(winner)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xl font-bold text-fg hover:text-accent transition-colors inline-flex items-center gap-1.5"
+              >
+                {winner.name} <MapPin className="w-4 h-4 text-accent" />
+              </a>
               <p className="text-sm text-muted mt-1">{winner.address}</p>
             </div>
           )}
@@ -245,9 +259,27 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-faint">#{i + 1}</span>
-                          <h3 className="font-semibold text-fg truncate">{rec.name}</h3>
+                          <a
+                            href={mapsUrl(rec)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-fg truncate hover:text-accent transition-colors"
+                          >
+                            {rec.name}
+                          </a>
                         </div>
                         <p className="text-sm text-muted mt-0.5">{rec.address}</p>
+                        {rec.details.summary && (
+                          <p className="text-sm text-fg/80 mt-1.5">{rec.details.summary}</p>
+                        )}
+                        <a
+                          href={mapsUrl(rec)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-accent mt-1.5 hover:underline"
+                        >
+                          <MapPin className="w-3 h-3" /> Voir sur Maps
+                        </a>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
