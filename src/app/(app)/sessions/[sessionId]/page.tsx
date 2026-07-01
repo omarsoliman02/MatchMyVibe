@@ -111,7 +111,7 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
     const es = new EventSource(`/api/sse?sessionId=${sessionId}`)
     es.onmessage = (e) => {
       const msg = JSON.parse(e.data)
-      if (msg.type === "ready") {
+      if (msg.type === "ready" || msg.type === "done") {
         loadSession()
         return
       }

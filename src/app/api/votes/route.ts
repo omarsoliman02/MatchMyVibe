@@ -55,5 +55,14 @@ export async function POST(req: NextRequest) {
     })
   })
 
+  // Seuil de clôture : le nombre de membres par défaut, ou voteThreshold si
+  // le groupe en a défini un (forcément <= totalMembers, validé à la création).
+  const threshold = gameSession.voteThreshold ?? totalMembers
+  const topVoteCount = Math.max(0, ...recommendations.map((rec) => rec._count.votes))
+  if (topVoteCount >= threshold) {
+    await prisma.session.update({ where: { id: sessionId }, data: { status: "DONE" } })
+    broadcast(sessionId, { type: "done" })
+  }
+
   return NextResponse.json({ vote })
 }

@@ -63,10 +63,13 @@ model UserPreference {
 }
 
 model Session {
-  id        String        @id @default(cuid())
-  groupId   String
-  status    SessionStatus @default(COLLECTING)
-  createdAt DateTime      @default(now())
+  id            String        @id @default(cuid())
+  groupId       String
+  status        SessionStatus @default(COLLECTING)
+  // Nombre de votes requis pour clore le vote automatiquement. Si null, le
+  // comportement par défaut est "tous les membres du groupe doivent voter".
+  voteThreshold Int?
+  createdAt     DateTime      @default(now())
 
   group           Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
   recommendations Recommendation[]

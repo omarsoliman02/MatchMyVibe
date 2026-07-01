@@ -99,7 +99,9 @@ describe("POST /api/match", () => {
     expect(res.status).toBe(200)
     expect(body.sessionId).toBe("session-1")
     expect(body.status).toBe("MATCHING")
-    expect(mockSessionCreate).toHaveBeenCalledWith({ data: { groupId: "group-1", status: "MATCHING" } })
+    expect(mockSessionCreate).toHaveBeenCalledWith({
+      data: { groupId: "group-1", status: "MATCHING", voteThreshold: null },
+    })
 
     // 2) Matching en arrière-plan : on déclenche le callback `after`.
     expect(mockAfter.cb).toBeInstanceOf(Function)
@@ -119,5 +121,38 @@ describe("POST /api/match", () => {
 
     const res = await POST(new NextRequest("http://localhost/api/match", { method: "POST", body: JSON.stringify({ groupId: "group-1" }) }))
     expect(res.status).toBe(400)
+  })
+
+  it("should accept and persist a custom voteThreshold within the group size", async () => {
+    mockSession.mockResolvedValue({ user: { id: "user-1" } })
+    mockGroupFind.mockResolvedValue({ ...MOCK_GROUP, preferences: MOCK_PREFERENCES })
+    mockSessionCreate.mockResolvedValue({ id: "session-1" })
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/match", {
+        method: "POST",
+        body: JSON.stringify({ groupId: "group-1", voteThreshold: 1 }),
+      })
+    )
+
+    expect(res.status).toBe(200)
+    expect(mockSessionCreate).toHaveBeenCalledWith({
+      data: { groupId: "group-1", status: "MATCHING", voteThreshold: 1 },
+    })
+  })
+
+  it("should return 400 when voteThreshold exceeds the group member count", async () => {
+    mockSession.mockResolvedValue({ user: { id: "user-1" } }) // MOCK_GROUP a 2 membres
+    mockGroupFind.mockResolvedValue({ ...MOCK_GROUP, preferences: MOCK_PREFERENCES })
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/match", {
+        method: "POST",
+        body: JSON.stringify({ groupId: "group-1", voteThreshold: 5 }),
+      })
+    )
+
+    expect(res.status).toBe(400)
+    expect(mockSessionCreate).not.toHaveBeenCalled()
   })
 })

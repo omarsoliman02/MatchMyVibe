@@ -16,6 +16,7 @@ import type { UserPreferenceInput, VenueType, ScoredVenue } from "@/types"
 const matchSchema = z.object({
   groupId: z.string().min(1),
   model: z.string().optional(),
+  voteThreshold: z.number().int().positive().optional(),
 })
 const SEARCH_RADIUS_METERS = 800
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "groupId required" }, { status: 400 })
   }
 
-  const { groupId, model } = parsed.data
+  const { groupId, model, voteThreshold } = parsed.data
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -47,10 +48,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No preferences collected yet" }, { status: 400 })
   }
 
+  // Le seuil ne peut pas dépasser l'effectif du groupe (sinon le vote ne
+  // pourrait jamais se clore automatiquement).
+  if (voteThreshold !== undefined && voteThreshold > group.members.length) {
+    return NextResponse.json(
+      { error: `voteThreshold cannot exceed group size (${group.members.length})` },
+      { status: 400 }
+    )
+  }
+
   // On crée la session puis on rend la main IMMÉDIATEMENT.
   // Le matching tourne en arrière-plan et pousse le résultat via SSE.
   const dbSession = await prisma.session.create({
-    data: { groupId, status: "MATCHING" },
+    data: { groupId, status: "MATCHING", voteThreshold: voteThreshold ?? null },
   })
 
   after(() => runMatching(dbSession.id, preferences, model))

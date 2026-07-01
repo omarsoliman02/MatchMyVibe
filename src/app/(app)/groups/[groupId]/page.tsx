@@ -95,7 +95,7 @@ export default async function GroupDetailPage({ params }: Props) {
             </div>
             <p className="text-sm font-medium text-fg">Tout le monde est prêt&nbsp;!</p>
             <p className="text-sm text-muted mt-1 mb-4">Lance l&apos;IA pour trouver le lieu idéal pour le groupe.</p>
-            <MatchButton groupId={groupId} />
+            <MatchButton groupId={groupId} memberCount={group.members.length} />
           </div>
         )}
 

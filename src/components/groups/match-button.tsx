@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation"
 import { Sparkles } from "@/components/ui/icons"
 import { LLM_MODELS, DEFAULT_MODEL_ID, resolveModel } from "@/lib/llm/models"
 
-export function MatchButton({ groupId }: { groupId: string }) {
+export function MatchButton({ groupId, memberCount }: { groupId: string; memberCount: number }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [model, setModel] = useState(DEFAULT_MODEL_ID)
+  const [voteThreshold, setVoteThreshold] = useState(memberCount)
 
   async function handleMatch() {
     setLoading(true)
@@ -18,7 +19,7 @@ export function MatchButton({ groupId }: { groupId: string }) {
     const res = await fetch("/api/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId, model }),
+      body: JSON.stringify({ groupId, model, voteThreshold }),
     })
 
     setLoading(false)
@@ -51,6 +52,23 @@ export function MatchButton({ groupId }: { groupId: string }) {
           ))}
         </select>
         {hint && <span className="block text-xs text-faint mt-1">{hint}</span>}
+      </label>
+
+      <label className="block text-left">
+        <span className="text-xs font-medium text-faint">Nombre de votes pour valider</span>
+        <input
+          type="number"
+          min={1}
+          max={memberCount}
+          value={voteThreshold}
+          onChange={(e) => {
+            const value = Number(e.target.value)
+            setVoteThreshold(Math.min(memberCount, Math.max(1, value || 1)))
+          }}
+          disabled={loading}
+          className="input w-full mt-1"
+        />
+        <span className="block text-xs text-faint mt-1">Sur {memberCount} membre{memberCount > 1 ? "s" : ""}. Le vote se clôt dès ce seuil atteint.</span>
       </label>
 
       <button onClick={handleMatch} disabled={loading} className="btn btn-primary btn-lg w-full">
