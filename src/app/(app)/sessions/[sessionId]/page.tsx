@@ -12,7 +12,11 @@ interface Recommendation {
   venueType: string
   latitude: number
   longitude: number
-  details: { compatibilityReasons?: string[]; summary?: string }
+  details: {
+    compatibilityReasons?: string[]
+    summary?: string
+    openNow?: { isOpen: boolean | null; reason: string }
+  }
   voteCount: number
 }
 
@@ -267,6 +271,7 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
                           >
                             {rec.name}
                           </a>
+                          <OpenNowBadge openNow={rec.details.openNow} />
                         </div>
                         <p className="text-sm text-muted mt-0.5">{rec.address}</p>
                         {rec.details.summary && (
@@ -327,6 +332,17 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
 
       {error && <p className="text-sm text-danger text-center">{error}</p>}
     </div>
+  )
+}
+
+// N'affiche rien si le statut est inconnu (tag OSM absent/ambigu) : "inconnu"
+// ne doit jamais être présenté comme "fermé".
+function OpenNowBadge({ openNow }: { openNow?: { isOpen: boolean | null; reason: string } }) {
+  if (!openNow || openNow.isOpen === null) return null
+  return (
+    <span className={`badge ${openNow.isOpen ? "badge-success" : "badge-warning"} shrink-0`}>
+      {openNow.isOpen ? "Ouvert maintenant" : "Fermé"}
+    </span>
   )
 }
 

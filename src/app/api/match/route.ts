@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth/config"
 import { calculateBarycenter } from "@/lib/overpass/barycenter"
 import { searchVenuesNearPoint } from "@/lib/overpass/client"
 import { rankVenues } from "@/lib/matching/score"
+import { isOpenNow } from "@/lib/matching/opening-hours"
 import { matchVenuesWithGemini } from "@/lib/gemini/matching"
 import { matchVenuesWithOllama } from "@/lib/ollama/matching"
 import { resolveModel } from "@/lib/llm/models"
@@ -116,7 +117,12 @@ async function persist(sessionId: string, venues: ScoredVenue[]) {
       longitude: v.longitude,
       venueType: v.venueType,
       score: v.score,
-      details: { summary: v.summary, compatibilityReasons: v.compatibilityReasons, tags: v.tags },
+      details: {
+        summary: v.summary,
+        compatibilityReasons: v.compatibilityReasons,
+        tags: v.tags,
+        openNow: isOpenNow(v.tags.opening_hours),
+      },
     })),
   })
 }
