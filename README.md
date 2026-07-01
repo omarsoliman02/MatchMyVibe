@@ -15,6 +15,27 @@
 
 Le matching combine un **classement déterministe** (instantané et fiable) et une **curation par IA**. Si Gemini est indisponible ou trop lent, l'app retombe silencieusement sur le classement déterministe — l'utilisateur n'est jamais bloqué.
 
+## 🧮 Comment fonctionne le scoring
+
+Avant que l'IA n'intervienne, chaque lieu trouvé autour du groupe reçoit une **note sur 1** calculée simplement, sans intelligence artificielle — cette étape est donc instantanée et toujours disponible, même si l'IA est en panne.
+
+Chaque lieu part avec une petite note de base, puis gagne des points selon 4 critères, chacun avec son propre poids :
+
+| Critère | Bonus | Explication |
+|---|---|---|
+| 🎯 Type de sortie recherché | jusqu'à **+0,30** | Plus les membres du groupe sont d'accord sur le type de lieu (restaurant, bar, cinéma…), plus le bonus est fort. |
+| 🥗 Régime alimentaire | **+0,12** par régime | Si le lieu est tagué comme compatible avec un régime demandé (végétarien, vegan, halal…), un bonus s'ajoute pour chaque régime respecté. |
+| 💶 Budget | **+0,15** | Si le lieu affiche une information de prix exploitable (entrée gratuite ou tarif indiqué) et que ce prix est dans le budget moyen du groupe. ⚠️ Limite connue : OpenStreetMap ne fournit quasiment jamais de prix fiable pour les restaurants/bars/cafés, donc ce bonus s'applique surtout aux lieux à entrée payante (cinéma, bowling, escape game). Sans information de prix, on reste neutre plutôt que de deviner. |
+| 📍 Proximité | jusqu'à **+0,25** | Plus le lieu est proche du point central du groupe (le barycentre géographique de toutes les positions), plus le bonus est élevé. Au-delà de 1,2 km, il n'y a plus de bonus. |
+
+Le total est ensuite plafonné à 1 : un lieu qui coche toutes les cases obtient la note maximale.
+
+**Exemple concret** : un groupe de 2 amis cherche un restaurant, l'un est végétarien, budget moyen 20 €.
+- Un **restaurant végétarien** à 300 m du groupe, sans info de prix → note ≈ 0,40 (base) + 0,30 (type demandé) + 0,12 (végétarien) + 0,25 × (1 − 300/1200) ≈ **0,95**.
+- Un **bar** à 2 km, sans rapport avec le régime demandé → note ≈ 0,40 (base) seulement, aucun autre bonus (le bar n'est pas le type recherché, pas de tag végétarien, trop loin pour le bonus proximité) → **0,40**.
+
+Cette note sert ensuite de filtre de présélection : les meilleurs lieux sont transmis à l'IA (Google Gemini), qui affine le classement final et rédige un résumé pour chaque recommandation.
+
 ## 🧱 Stack technique
 
 | Domaine | Technologie |
