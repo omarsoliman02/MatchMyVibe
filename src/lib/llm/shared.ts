@@ -22,6 +22,25 @@ export function buildMatchingPrompt(
   venues: OsmVenue[],
   venueLimit = 12
 ): string {
+  const freeTexts = preferences
+    .map((p) => p.freeText?.trim())
+    .filter((t): t is string => !!t)
+
+  const freeTextSection = freeTexts.length
+    ? `\n\nPRÉCISIONS DU GROUPE:\n${JSON.stringify(freeTexts)}\nTiens compte de ces précisions dans le choix des lieux et dans le "summary" généré.`
+    : ""
+
+  // On n'a aucune donnée de programmation/séances réelle (Overpass ne fournit pas ça) :
+  // le genre est juste une préférence déclarative à mentionner avec la réserve qui va avec.
+  const movieGenres = [
+    ...new Set(preferences.flatMap((p) => p.movieGenres ?? []).filter((g) => g && g !== "any")),
+  ]
+  const hasCinemaVenue = venues.some((v) => v.venueType === "cinema")
+  const movieGenreSection =
+    hasCinemaVenue && movieGenres.length
+      ? `\n\nGENRES DE FILM PRÉFÉRÉS DU GROUPE (si un cinéma est recommandé):\n${JSON.stringify(movieGenres)}\nOn n'a pas la programmation réelle des cinémas (aucune donnée de séances). Si tu recommandes un cinéma, précise dans le "summary" que le genre n'est pas garanti faute de données de séances, tout en indiquant que le lieu convient pour une sortie ciné.`
+      : ""
+
   return `Expert en sorties de groupe. Choisis les 3 meilleurs lieux parmi la liste, selon les préférences.
 
 PRÉFÉRENCES (budget, régime, types):
@@ -31,7 +50,7 @@ ${JSON.stringify(
       diet: p.dietaryRestrictions,
       types: p.venueTypes,
     }))
-  )}
+  )}${freeTextSection}${movieGenreSection}
 
 LIEUX:
 ${JSON.stringify(compactVenues(venues, venueLimit))}

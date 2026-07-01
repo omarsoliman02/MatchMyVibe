@@ -4,7 +4,17 @@ export interface UserPreferenceInput {
   venueTypes: VenueType[]
   latitude: number
   longitude: number
+  freeText?: string | null
+  movieGenres?: MovieGenre[]
 }
+
+export type MovieGenre =
+  | "action"
+  | "comedy"
+  | "horror"
+  | "animation"
+  | "drama"
+  | "any"
 
 export type DietaryRestriction =
   | "vegetarian"

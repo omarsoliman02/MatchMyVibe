@@ -20,6 +20,11 @@ export const userPreferenceSchema = z.object({
     .min(1, "At least one venue type required"),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  freeText: z.string().max(200).optional(),
+  movieGenres: z
+    .array(z.enum(["action", "comedy", "horror", "animation", "drama", "any"]))
+    .optional()
+    .default([]),
 })
 
 export type ValidatedPreference = z.infer<typeof userPreferenceSchema>

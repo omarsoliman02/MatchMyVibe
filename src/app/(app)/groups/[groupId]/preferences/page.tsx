@@ -3,7 +3,9 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, MapPin, Wallet, Salad, Check } from "@/components/ui/icons"
+import { ArrowLeft, MapPin, Wallet, Salad, Sparkles, Check } from "@/components/ui/icons"
+
+const FREE_TEXT_MAX_LENGTH = 200
 
 const DIETARY_OPTIONS = [
   { value: "none", label: "Aucune restriction" },
@@ -22,6 +24,15 @@ const VENUE_OPTIONS = [
   { value: "cinema", label: "🎬 Cinéma" },
   { value: "bowling", label: "🎳 Bowling" },
   { value: "escape_game", label: "🔐 Escape game" },
+]
+
+const MOVIE_GENRE_OPTIONS = [
+  { value: "action", label: "Action" },
+  { value: "comedy", label: "Comédie" },
+  { value: "horror", label: "Horreur" },
+  { value: "animation", label: "Animation" },
+  { value: "drama", label: "Drame" },
+  { value: "any", label: "Peu importe" },
 ]
 
 function SectionHeader({ icon, title, trailing }: { icon: React.ReactNode; title: string; trailing?: React.ReactNode }) {
@@ -51,6 +62,8 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
   const [budget, setBudget] = useState(30)
   const [dietary, setDietary] = useState<string[]>([])
   const [venueTypes, setVenueTypes] = useState<string[]>(["restaurant"])
+  const [freeText, setFreeText] = useState("")
+  const [movieGenres, setMovieGenres] = useState<string[]>([])
 
   // Adresse → coordonnées (géocodage OpenStreetMap / Nominatim).
   async function geocodeAddress(query: string) {
@@ -122,6 +135,10 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
     setVenueTypes((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
   }
 
+  function toggleMovieGenre(value: string) {
+    setMovieGenres((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!location) { setError("Localisation requise"); return }
@@ -140,6 +157,8 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
         venueTypes,
         latitude: location.lat,
         longitude: location.lng,
+        freeText: freeText.trim(),
+        movieGenres: venueTypes.includes("cinema") ? movieGenres : [],
       }),
     })
 
@@ -261,6 +280,43 @@ export default function PreferencesPage({ params }: { params: Promise<{ groupId:
               </button>
             ))}
           </div>
+        </div>
+
+        {venueTypes.includes("cinema") && (
+          <div className="card p-5">
+            <SectionHeader icon={<Sparkles className="w-4 h-4" />} title="Genres de film préférés" />
+            <p className="text-xs text-muted mb-3">
+              On n&apos;a pas les séances réelles des cinémas, donc ce choix sert juste à orienter la recommandation, sans garantie.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {MOVIE_GENRE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleMovieGenre(opt.value)}
+                  className={`chip ${movieGenres.includes(opt.value) ? "chip-active" : ""}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="card p-5">
+          <SectionHeader
+            icon={<Sparkles className="w-4 h-4" />}
+            title="Précisions (optionnel)"
+            trailing={<span className="text-xs text-faint">{freeText.length}/{FREE_TEXT_MAX_LENGTH}</span>}
+          />
+          <textarea
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value.slice(0, FREE_TEXT_MAX_LENGTH))}
+            maxLength={FREE_TEXT_MAX_LENGTH}
+            placeholder="Précise ton envie : anniversaire, ambiance calme, en terrasse..."
+            rows={3}
+            className="input w-full resize-none"
+          />
         </div>
 
         {error && <p className="text-sm alert-error rounded-xl px-3 py-2.5 text-center">{error}</p>}

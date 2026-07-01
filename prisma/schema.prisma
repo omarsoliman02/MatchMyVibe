@@ -51,6 +51,8 @@ model UserPreference {
   venueTypes          String[]
   latitude            Float
   longitude           Float
+  freeText            String?
+  movieGenres         String[] @default([])
 
   updatedAt DateTime @updatedAt
 
