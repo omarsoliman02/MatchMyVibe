@@ -9,32 +9,35 @@
 ## ✨ Fonctionnement
 
 1. **Crée un groupe** et invite tes amis avec un simple code d'invitation.
-2. **Chaque membre donne ses préférences** : budget, régime (végétarien, vegan, halal, casher, sans gluten…), types de lieux (restaurant, bar, café, boîte, cinéma, bowling, escape game) et sa position GPS.
-3. **L'app calcule le barycentre géographique** du groupe, cherche les lieux autour via OpenStreetMap, les **classe** (type recherché + compatibilité régime + proximité), puis fait **curer le top 3 par l'IA (Google Gemini)**.
-4. **Les membres votent en direct** (Server-Sent Events) sur la recommandation préférée.
+2. **Chaque membre donne ses préférences** : budget, régime (végétarien, vegan, halal, casher, sans gluten…), types de lieux (restaurant, bar, café, boîte, cinéma, bowling, escape game), un champ libre optionnel, un genre de film préféré si cinéma est coché, et sa position GPS.
+3. **L'app calcule le barycentre géographique** du groupe, cherche les lieux autour via OpenStreetMap, les **classe** (type recherché + régime + budget + horaires d'ouverture + proximité), puis fait **curer le top 3 par l'IA**. Au lancement du matching, on choisit le modèle (Gemini en cloud, ou un modèle local via Ollama) et le nombre de votes nécessaires pour clore la session.
+4. **Les membres votent en direct** (Server-Sent Events) sur la recommandation préférée ; la session se clôt automatiquement dès que le seuil de votes configuré est atteint, et chaque lieu affiche un badge "ouvert maintenant" quand l'info est disponible.
 
-Le matching combine un **classement déterministe** (instantané et fiable) et une **curation par IA**. Si Gemini est indisponible ou trop lent, l'app retombe silencieusement sur le classement déterministe — l'utilisateur n'est jamais bloqué.
+Le matching combine un **classement déterministe** (instantané et fiable) et une **curation par IA**. Si l'IA choisie est indisponible ou trop lente, l'app retombe silencieusement sur le classement déterministe — l'utilisateur n'est jamais bloqué.
 
 ## 🧮 Comment fonctionne le scoring
 
 Avant que l'IA n'intervienne, chaque lieu trouvé autour du groupe reçoit une **note sur 1** calculée simplement, sans intelligence artificielle — cette étape est donc instantanée et toujours disponible, même si l'IA est en panne.
 
-Chaque lieu part avec une petite note de base, puis gagne des points selon 4 critères, chacun avec son propre poids :
+Chaque lieu part avec une petite note de base, puis gagne (ou perd) des points selon 5 critères, chacun avec son propre poids :
 
 | Critère | Bonus | Explication |
 |---|---|---|
 | 🎯 Type de sortie recherché | jusqu'à **+0,30** | Plus les membres du groupe sont d'accord sur le type de lieu (restaurant, bar, cinéma…), plus le bonus est fort. |
 | 🥗 Régime alimentaire | **+0,12** par régime | Si le lieu est tagué comme compatible avec un régime demandé (végétarien, vegan, halal…), un bonus s'ajoute pour chaque régime respecté. |
 | 💶 Budget | **+0,15** | Si le lieu affiche une information de prix exploitable (entrée gratuite ou tarif indiqué) et que ce prix est dans le budget moyen du groupe. ⚠️ Limite connue : OpenStreetMap ne fournit quasiment jamais de prix fiable pour les restaurants/bars/cafés, donc ce bonus s'applique surtout aux lieux à entrée payante (cinéma, bowling, escape game). Sans information de prix, on reste neutre plutôt que de deviner. |
+| 🕒 Horaires d'ouverture | **−0,20** si fermé | Le tag OSM `opening_hours` est analysé pour savoir si le lieu est ouvert à l'instant présent. Un lieu détecté comme fermé est pénalisé (pas exclu) — il ne disparaît du résultat que si le groupe a déjà assez d'alternatives ouvertes. Statut inconnu (tag absent/ambigu) → aucun impact. |
 | 📍 Proximité | jusqu'à **+0,25** | Plus le lieu est proche du point central du groupe (le barycentre géographique de toutes les positions), plus le bonus est élevé. Au-delà de 1,2 km, il n'y a plus de bonus. |
 
 Le total est ensuite plafonné à 1 : un lieu qui coche toutes les cases obtient la note maximale.
+
+Ce classement déterministe sert aussi de filet de sécurité : c'est lui qui est utilisé tel quel si l'IA est indisponible, trop lente, ou si le seuil de votes n'a pas encore été atteint.
 
 **Exemple concret** : un groupe de 2 amis cherche un restaurant, l'un est végétarien, budget moyen 20 €.
 - Un **restaurant végétarien** à 300 m du groupe, sans info de prix → note ≈ 0,40 (base) + 0,30 (type demandé) + 0,12 (végétarien) + 0,25 × (1 − 300/1200) ≈ **0,95**.
 - Un **bar** à 2 km, sans rapport avec le régime demandé → note ≈ 0,40 (base) seulement, aucun autre bonus (le bar n'est pas le type recherché, pas de tag végétarien, trop loin pour le bonus proximité) → **0,40**.
 
-Cette note sert ensuite de filtre de présélection : les meilleurs lieux sont transmis à l'IA (Google Gemini), qui affine le classement final et rédige un résumé pour chaque recommandation.
+Cette note sert ensuite de filtre de présélection : les meilleurs lieux sont transmis à l'IA (Gemini ou modèle local Ollama, au choix), qui affine le classement final et rédige un résumé pour chaque recommandation.
 
 ## 🧱 Stack technique
 
@@ -44,7 +47,7 @@ Cette note sert ensuite de filtre de présélection : les meilleurs lieux sont t
 | Langage | TypeScript |
 | Base de données | PostgreSQL + [Prisma 7](https://www.prisma.io) |
 | Authentification | NextAuth (credentials) + bcrypt |
-| IA | [Google Gemini](https://ai.google.dev) (`gemini-2.5-flash-lite`) |
+| IA | [Google Gemini](https://ai.google.dev) (`gemini-2.5-flash-lite`, cloud) **ou** [Ollama](https://ollama.com) (`qwen2.5:3b` / `llama3.2:3b`, local) — au choix dans l'UI |
 | Données lieux | [OpenStreetMap Overpass API](https://overpass-api.de) (sans clé) |
 | Temps réel | Server-Sent Events |
 | UI | Tailwind CSS 4 · thème clair/sombre |
@@ -57,7 +60,9 @@ Cette note sert ensuite de filtre de présélection : les meilleurs lieux sont t
 
 - [Node.js](https://nodejs.org) 22+
 - Une instance **PostgreSQL** (ou Docker)
-- Une clé API **Google Gemini** ([obtenir une clé](https://aistudio.google.com/app/apikey)) — optionnelle : sans elle, le classement déterministe prend le relais.
+- Optionnel — au moins une source d'IA de curation (sinon le classement déterministe prend le relais) :
+  - une clé API **Google Gemini** ([obtenir une clé](https://aistudio.google.com/app/apikey)), et/ou
+  - [Ollama](https://ollama.com) installé en local avec les modèles `qwen2.5:3b` et/ou `llama3.2:3b` (`ollama pull qwen2.5:3b`)
 
 ### Option A — Docker (recommandé)
 
@@ -67,6 +72,8 @@ Lance l'application **et** une base PostgreSQL en une commande :
 cp .env.example .env.local      # renseigne GEMINI_API_KEY
 docker compose up
 ```
+
+> Si tu utilises Ollama en local (hors conteneur), le conteneur `app` y accède automatiquement via `host.docker.internal:11434` — pas de configuration supplémentaire.
 
 ➡️ Ouvre [http://localhost:3000](http://localhost:3000)
 
@@ -99,6 +106,7 @@ Copie `.env.example` vers `.env.local` puis renseigne :
 | `NEXTAUTH_SECRET` | Secret de signature des sessions NextAuth (génère-le avec `openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | URL publique de l'app (`http://localhost:3000` en dev) |
 | `GEMINI_API_KEY` | Clé API Google Gemini (optionnelle) |
+| `OLLAMA_BASE_URL` | URL du serveur Ollama pour les modèles locaux (optionnelle, défaut `http://localhost:11434`) |
 
 > Les fichiers `.env*` (hors `.env.example`) sont ignorés par Git : aucun secret n'est versionné.
 
@@ -132,8 +140,10 @@ src/
 │   └── api/            # routes API (auth, groups, match, votes, sse…)
 ├── components/         # composants UI React
 ├── lib/
-│   ├── matching/       # classement déterministe des lieux
-│   ├── gemini/         # curation du top 3 par IA
+│   ├── matching/       # classement déterministe des lieux (score + horaires d'ouverture)
+│   ├── llm/            # registre des modèles IA + prompt/parsing partagés
+│   ├── gemini/         # curation du top 3 par Gemini (cloud)
+│   ├── ollama/         # curation du top 3 par un modèle local via Ollama
 │   ├── overpass/       # client OpenStreetMap + calcul du barycentre
 │   ├── sse/            # broadcaster temps réel
 │   ├── auth/           # config NextAuth + validation
